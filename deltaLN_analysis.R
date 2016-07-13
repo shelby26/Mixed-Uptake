@@ -74,7 +74,7 @@ points(D.Count ~ as.numeric(Sym_ID), data=droplevels(BDdf), type="b", col="purpl
 lines(D.Count ~ as.numeric(Sym_ID), data=droplevels(BDdf)[-2,], lty=2, col="purple")
 points(B.Count + D.Count ~ as.numeric(Sym_ID), data=droplevels(BDdf), type="b", col="darkgray")
 lines(B.Count + D.Count ~ as.numeric(Sym_ID), data=droplevels(BDdf)[-2,], lty=2, col="darkgray")
-mtext(side=1, line=2, text=paste(with(Zeros, round(1-Zeros[Sym_ID=="BD" & Env=="Dark", "B.Zero"],2)), "/",
+mtext(side=1, line=2, font=2, text=paste(with(Zeros, round(1-Zeros[Sym_ID=="BD" & Env=="Dark", "B.Zero"],2)), "/",
                                  with(Zeros, round(1-Zeros[Sym_ID=="BD" & Env=="Dark", "D.Zero"],2))),
       cex=0.75)
 
@@ -88,7 +88,7 @@ points(B.Count ~ as.numeric(Sym_ID), data=droplevels(ABdf), type="b", col="blue"
 lines(B.Count ~ as.numeric(Sym_ID), data=droplevels(ABdf)[-2,], lty=2, col="blue")
 points(A.Count + B.Count ~ as.numeric(Sym_ID), data=droplevels(ABdf), type="b", col="darkgray")
 lines(A.Count + B.Count ~ as.numeric(Sym_ID), data=droplevels(ABdf)[-2,], lty=2, col="darkgray")
-mtext(side=1, line=2, text=paste(with(Zeros, round(1-Zeros[Sym_ID=="AB" & Env=="Light", "A.Zero"],2)), "/",
+mtext(side=1, line=2, font=2, text=paste(with(Zeros, round(1-Zeros[Sym_ID=="AB" & Env=="Light", "A.Zero"],2)), "/",
                                  with(Zeros, round(1-Zeros[Sym_ID=="AB" & Env=="Light", "B.Zero"],2))),
       cex=0.75)
 
@@ -155,7 +155,7 @@ points(B.Count ~ as.numeric(Sym_ID), data=droplevels(ABdf), type="b", col="blue"
 lines(B.Count ~ as.numeric(Sym_ID), data=droplevels(ABdf)[-2,], lty=2, col="blue")
 points(A.Count + B.Count ~ as.numeric(Sym_ID), data=droplevels(ABdf), type="b", col="darkgray")
 lines(A.Count + B.Count ~ as.numeric(Sym_ID), data=droplevels(ABdf)[-2,], lty=2, col="darkgray")
-mtext(side=1, line=2, text=paste(with(Zeros, round(1-Zeros[Sym_ID=="AB" & Env=="Dark", "A.Zero"],2)), "/",
+mtext(side=1, line=2, font=2, text=paste(with(Zeros, round(1-Zeros[Sym_ID=="AB" & Env=="Dark", "A.Zero"],2)), "/",
                                  with(Zeros, round(1-Zeros[Sym_ID=="AB" & Env=="Dark", "B.Zero"],2))),
       cex=0.75)
 
@@ -183,6 +183,8 @@ points(D.Count ~ as.numeric(Sym_ID), data=droplevels(BDdf), type="b", col="purpl
 lines(D.Count ~ as.numeric(Sym_ID), data=droplevels(BDdf)[-2,], lty=2, col="purple")
 points(B.Count + D.Count ~ as.numeric(Sym_ID), data=droplevels(BDdf), type="b", col="darkgray")
 lines(B.Count + D.Count ~ as.numeric(Sym_ID), data=droplevels(BDdf)[-2,], lty=2, col="darkgray")
+text(c(-10000,10000,-10000),"*",cex=2,col="purple")
+text(c(-10000,0,-10000),"*",cex=2,col="blue")
 mtext(side=1, line=2, text=paste(with(Zeros, round(1-Zeros[Sym_ID=="BD" & Env=="Dark", "B.Zero"],2)), "/",
                                  with(Zeros, round(1-Zeros[Sym_ID=="BD" & Env=="Dark", "D.Zero"],))),
       cex=0.75)
@@ -197,6 +199,7 @@ points(B.Count ~ as.numeric(Sym_ID), data=droplevels(ABdf), type="b", col="blue"
 lines(B.Count ~ as.numeric(Sym_ID), data=droplevels(ABdf)[-2,], lty=2, col="blue")
 points(A.Count + B.Count ~ as.numeric(Sym_ID), data=droplevels(ABdf), type="b", col="darkgray")
 lines(A.Count + B.Count ~ as.numeric(Sym_ID), data=droplevels(ABdf)[-2,], lty=2, col="darkgray")
+text(c(-10000,0,-10000),"*",cex=2,col="red")
 mtext(side=1, line=2, text=paste(with(Zeros, round(1-Zeros[Sym_ID=="AB" & Env=="Light", "A.Zero"],2)), "/",
                                  with(Zeros, round(1-Zeros[Sym_ID=="AB" & Env=="Light", "B.Zero"],2))),
       cex=0.75)
@@ -210,6 +213,7 @@ points(D.Count ~ as.numeric(Sym_ID), data=droplevels(ADdf), type="b", col="purpl
 lines(D.Count ~ as.numeric(Sym_ID), data=droplevels(ADdf)[-2,], lty=2, col="purple")
 points(A.Count + D.Count ~ as.numeric(Sym_ID), data=droplevels(ADdf), type="b", col="darkgray")
 lines(A.Count + D.Count ~ as.numeric(Sym_ID), data=droplevels(ADdf)[-2,], lty=2, col="darkgray")
+text(c(-10000,0,-10000),"*",cex=2,col="purple")
 mtext(side=1, line=2, text=paste(with(Zeros, round(1-Zeros[Sym_ID=="AD" & Env=="Light", "A.Zero"],2)), "/",
                                  with(Zeros, round(1-Zeros[Sym_ID=="AD" & Env=="Light", "D.Zero"],2))),
       cex=0.75)
