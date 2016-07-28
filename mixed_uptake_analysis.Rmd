@@ -113,6 +113,24 @@ deWit <- function(s1, s2, time, data) {
 
   # Create a two-panel figure plotting lsmeans
   par(mfrow=c(1,2))
+    # Subset "dark" data and plot
+  dark <- subset(summary(fulllsm), Env=="Dark")
+  dark$lsmean[is.na(dark$lsmean)] <- 0
+  dark$Q <- 10^dark$lsmean
+  dark$`Q+se` <- 10^(dark$lsmean + dark$SE)
+  dark$`Q-se` <- 10^(dark$lsmean - dark$SE)
+  max <- max(dark$`Q+se`, na.rm=T)
+  plot(Q ~ as.numeric(Sym_ID), data=dark, xaxt="n", xlab="", main="Dark", ylim=c(0, max),
+       col=c("red", "blue", "purple")[match(Target, c("A","B","D"))])
+  with(dark, arrows(as.numeric(Sym_ID), `Q+se`, as.numeric(Sym_ID), `Q-se`, angle=90, code=3, length=0.05,
+                    col=c("red", "blue", "purple")[match(Target, c("A","B","D"))]))
+  axis(side=1, at=unique(as.numeric(dark$Sym_ID)), labels=levels(dark$Sym_ID)[unique(as.numeric(dark$Sym_ID))])
+  for (s in levels(factor(dark$Target))) {
+    lines(Q ~ as.numeric(Sym_ID), lty=2, col=c("red", "blue", "purple")[match(Target, c("A","B","D"))],
+          data=subset(dark, Target==s & nchar(as.character(Sym_ID))==1))
+    lines(Q ~ as.numeric(Sym_ID), lty=1, col=c("red", "blue", "purple")[match(Target, c("A","B","D"))],
+          data=subset(dark, Target==s))
+  }
   # Subset "light" data and plot
   light <- subset(summary(fulllsm), Env=="Light")
   light$lsmean[is.na(light$lsmean)] <- 0
@@ -121,34 +139,17 @@ deWit <- function(s1, s2, time, data) {
   light$`Q-se` <- 10^(light$lsmean - light$SE)
   max <- max(light$`Q+se`, na.rm=T)
   plot(Q ~ as.numeric(Sym_ID), data=light, xaxt="n", xlab="", main="Light", ylim=c(0, max),
-       col=c("blue", "red", "green")[match(Target, c("A","B","D"))])
+       col=c("red", "blue", "purple")[match(Target, c("A","B","D"))])
   with(light, arrows(as.numeric(Sym_ID), `Q+se`, as.numeric(Sym_ID), `Q-se`, angle=90, code=3, length=0.05,
-                     col=c("blue", "red", "green")[match(Target, c("A","B","D"))]))
+                     col=c("red", "blue", "purple")[match(Target, c("A","B","D"))]))
   axis(side=1, at=unique(as.numeric(light$Sym_ID)), labels=levels(light$Sym_ID)[unique(as.numeric(light$Sym_ID))])
   for (s in levels(factor(light$Target))) {
-    lines(Q ~ as.numeric(Sym_ID), lty=2, col=c("blue", "red", "green")[match(Target, c("A","B","D"))],
+    lines(Q ~ as.numeric(Sym_ID), lty=2, col=c("red", "blue", "purple")[match(Target, c("A","B","D"))],
           data=subset(light, Target==s & nchar(as.character(Sym_ID))==1))
-    lines(Q ~ as.numeric(Sym_ID), lty=1, col=c("blue", "red", "green")[match(Target, c("A","B","D"))],
+    lines(Q ~ as.numeric(Sym_ID), lty=1, col=c("red", "blue", "purple")[match(Target, c("A","B","D"))],
           data=subset(light, Target==s))
   }
-  # Subset "dark" data and plot
-  dark <- subset(summary(fulllsm), Env=="Dark")
-  dark$lsmean[is.na(dark$lsmean)] <- 0
-  dark$Q <- 10^dark$lsmean
-  dark$`Q+se` <- 10^(dark$lsmean + light$SE)
-  dark$`Q-se` <- 10^(dark$lsmean - light$SE)
-  max <- max(dark$`Q+se`, na.rm=T)
-  plot(Q ~ as.numeric(Sym_ID), data=dark, xaxt="n", xlab="", main="Dark", ylim=c(0, max),
-       col=c("blue", "red", "green")[match(Target, c("A","B","D"))])
-  with(dark, arrows(as.numeric(Sym_ID), `Q+se`, as.numeric(Sym_ID), `Q-se`, angle=90, code=3, length=0.05,
-                    col=c("blue", "red", "green")[match(Target, c("A","B","D"))]))
-  axis(side=1, at=unique(as.numeric(dark$Sym_ID)), labels=levels(dark$Sym_ID)[unique(as.numeric(dark$Sym_ID))])
-  for (s in levels(factor(dark$Target))) {
-    lines(Q ~ as.numeric(Sym_ID), lty=2, col=c("blue", "red", "green")[match(Target, c("A","B","D"))],
-          data=subset(dark, Target==s & nchar(as.character(Sym_ID))==1))
-    lines(Q ~ as.numeric(Sym_ID), lty=1, col=c("blue", "red", "green")[match(Target, c("A","B","D"))],
-          data=subset(dark, Target==s))
-  }
+
   
   # Return contrasts and summary stats
   return(list(s1lsm=s1lsm, s2lsm=s2lsm, fulllsm=fulllsm))
