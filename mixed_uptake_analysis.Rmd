@@ -1,0 +1,250 @@
+---
+title: "mixed_uptake_analysis.Rmd"
+author: "Ross Cunning"
+date: "July 27, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+library(lme4)
+library(lmerTest)
+library(lattice)
+library(reshape2)
+library(multcomp)
+library(lsmeans)
+```
+# Data import and calculation of cell numbers in polyps
+### Import standard curve data
+```{r std}
+std <- read.csv("stdcurves.csv")
+std$CT <- as.numeric(as.character(std$CT))
+std$Plate <- as.factor(std$Plate)
+std <- std[which(std$Quantity<=64000), ]  # Ignore data from 128,000 cells
+```
+
+### Import polyp data
+```{r polyp}
+polyp <- read.csv("polyps.csv")
+polyp <- polyp[, c("Plate", "Sample", "Target", "CT")]
+polyp$CT <- as.numeric(as.character(polyp$CT))
+polyp$Plate <- as.numeric(as.character(polyp$Plate))
+target <- polyp$Target
+polyp$Target <- as.numeric(as.factor(polyp$Target))
+# Aggregate technical replicates -- samples where only one replicate amplified will return as NA
+polyp <- aggregate(polyp, by=list(Sample=polyp$Sample, Target=polyp$Target, Plate=polyp$Plate), FUN=mean)
+polyp$Target <- levels(target)[polyp$Target]
+polyp <- polyp[,c(1,2,3,7)]
+```
+
+### Visualize standard curves on each plate
+```{r stdcurvefig}
+xyplot(log10(Quantity) ~ CT | Plate, groups=Target, type=c("p", "r"), data=std)
+```
+
+### Fit mixed model to standard curve data
+```{r stdmod}
+curves <- lmerTest::lmer(log10(Quantity) ~ CT * Target + (Target|Plate) + (CT|Plate), data=std)
+anova(curves)  # Interaction is significant --> slopes are different
+```
+
+### Calculate quantities for polyp samples using model
+```{r calcquant}
+#predict(curves, newdata=polyp)
+# error: plate 1 not present in standard curve data ---????
+# remove plate 1 samples for now...
+polyp <- droplevels(polyp[which(polyp$Plate!="1"), ])
+polyp$Quantity2 <- 10^predict(curves, newdata=polyp)
+#polyp$Quantity2 <- 10^predict(curves, newdata=polyp, re.form=NA)
+```
+
+### Import sample data and merge with qPCR data
+```{r samdat}
+sam <- read.csv("qPCRdata.csv")  # sample data is called "qPCRdata.csv"
+sam <- sam[, c("Sample", "Sym_ID", "Env", "Time", "Rep")]
+df <- merge(sam, polyp, by = "Sample")
+# Identify samples that were successful mixed infections
+nclades <- aggregate(df$Quantity2, by=list(Sample=df$Sample), FUN=function(x) length(is.na(x)[is.na(x)==F]))
+rownames(nclades) <- nclades$Sample
+df$mixed <- ifelse(nclades[as.character(df$Sample), "x"] > 1, TRUE, FALSE)
+df$mixed[which(nchar(as.character(df$Sym_ID))==1)] <- NA
+```
+
+### Create function to test deviation from deWit expectations and plot results
+
+This function is subsequently used to run analyses for different pairs of symbionts. The function subsets the relevant data for the selected symbionts and time point, **excludes polyps that were offered two symbionts but only took up one**, and then fits a mixed model **(with plate included as a random factor)** to the log-transformed cell quantity data. For each focal symbiont, the quantity of cells in the mixed infection is compared to the quantity of cells in the single infection divided by two. All single and mixed observations are maintained in the model, **allowing the variance of the single infection data to be maintained** in the statistical test, instead of reducing this variance to zero by using a single value as the "expected" value (e.g., half of the mean value from single infections, as was done previously). The function then plots the results in the same format as before, and returns the results of the statistical tests comparing actual values in mixed infections to expected values.
+
+```{r dewit}
+deWit <- function(s1, s2, time, data) {
+  # Create a subset of the data for symbionts s1 and s2 at the selected time point (time)
+  df <- subset(data, 
+               Time==time & 
+               Sym_ID %in% c(s1, paste0(c(s1, s2)[order(c(s1, s2))], collapse=""), s2) &
+               Target %in% c(s1, s2) &
+               (mixed==T | is.na(mixed)))  # excludes polyps that were offered two symbionts but only took up one
+  df <- droplevels(df)  # drop empty factor levels
+  # Fit a mixed model to compare abundance of symbiont1 in mixed infection to expected value
+  # of deWit model (i.e., half of the values from symbiont1 single infections)
+  levs <- levels(df$Sym_ID)[grep(s1, levels(df$Sym_ID))]
+  s1mod <- with(subset(df, Target==s1 & Sym_ID %in% levs), {
+    # Divide quantities of focal symbiont in single infections by 2 to get deWit expectations
+    Quantity2[which(Sym_ID==s1)] <- Quantity2[which(Sym_ID==s1)] / 2
+    # Fit mixed model
+    lmer(log10(Quantity2) ~ Sym_ID * Env + (1|Plate)) 
+  })
+  # Compute lsmeans and contrasts
+  s1lsm <- lsmeans(s1mod, specs="Sym_ID", by="Env", contr="trt.vs.ctrl", ref=match(s1, levs)) 
+  
+  # Fit a mixed model to compare abundance of symbiont2 in mixed infection to expected value
+  # of deWit model (i.e., half of the values from symbiont2 single infections)
+  levs <- levels(df$Sym_ID)[grep(s2, levels(df$Sym_ID))]
+  s2mod <- with(subset(df, Target==s2 & Sym_ID %in% levs), {
+    # Divide quantities of focal symbiont in single infections by 2 to get deWit expectations
+    Quantity2[which(Sym_ID==s2)] <- Quantity2[which(Sym_ID==s2)] / 2
+    # Fit mixed model with plate as random factor
+    lmer(log10(Quantity2) ~ Sym_ID * Env + (1|Plate))
+  })
+  # Compute lsmeans and contrasts
+  s2lsm <- lsmeans(s2mod, specs="Sym_ID", by="Env", contr="trt.vs.ctrl", ref=match(s2, levs))
+  
+  # Compute full model for lsmeans
+  fullmod <- lmer(log10(Quantity2) ~ Target * Sym_ID * Env + (Target|Plate), data=df)
+  fulllsm <- lsmeans(fullmod, specs=c("Sym_ID", "Env", "Target"))
+
+  # Create a two-panel figure plotting lsmeans
+  par(mfrow=c(1,2))
+  # Subset "light" data and plot
+  light <- subset(summary(fulllsm), Env=="Light")
+  light$lsmean[is.na(light$lsmean)] <- 0
+  light$Q <- 10^light$lsmean
+  light$`Q+se` <- 10^(light$lsmean + light$SE)
+  light$`Q-se` <- 10^(light$lsmean - light$SE)
+  max <- max(light$`Q+se`, na.rm=T)
+  plot(Q ~ as.numeric(Sym_ID), data=light, xaxt="n", xlab="", main="Light", ylim=c(0, max),
+       col=c("blue", "red", "green")[match(Target, c("A","B","D"))])
+  with(light, arrows(as.numeric(Sym_ID), `Q+se`, as.numeric(Sym_ID), `Q-se`, angle=90, code=3, length=0.05,
+                     col=c("blue", "red", "green")[match(Target, c("A","B","D"))]))
+  axis(side=1, at=unique(as.numeric(light$Sym_ID)), labels=levels(light$Sym_ID)[unique(as.numeric(light$Sym_ID))])
+  for (s in levels(factor(light$Target))) {
+    lines(Q ~ as.numeric(Sym_ID), lty=2, col=c("blue", "red", "green")[match(Target, c("A","B","D"))],
+          data=subset(light, Target==s & nchar(as.character(Sym_ID))==1))
+    lines(Q ~ as.numeric(Sym_ID), lty=1, col=c("blue", "red", "green")[match(Target, c("A","B","D"))],
+          data=subset(light, Target==s))
+  }
+  # Subset "dark" data and plot
+  dark <- subset(summary(fulllsm), Env=="Dark")
+  dark$lsmean[is.na(dark$lsmean)] <- 0
+  dark$Q <- 10^dark$lsmean
+  dark$`Q+se` <- 10^(dark$lsmean + light$SE)
+  dark$`Q-se` <- 10^(dark$lsmean - light$SE)
+  max <- max(dark$`Q+se`, na.rm=T)
+  plot(Q ~ as.numeric(Sym_ID), data=dark, xaxt="n", xlab="", main="Dark", ylim=c(0, max),
+       col=c("blue", "red", "green")[match(Target, c("A","B","D"))])
+  with(dark, arrows(as.numeric(Sym_ID), `Q+se`, as.numeric(Sym_ID), `Q-se`, angle=90, code=3, length=0.05,
+                    col=c("blue", "red", "green")[match(Target, c("A","B","D"))]))
+  axis(side=1, at=unique(as.numeric(dark$Sym_ID)), labels=levels(dark$Sym_ID)[unique(as.numeric(dark$Sym_ID))])
+  for (s in levels(factor(dark$Target))) {
+    lines(Q ~ as.numeric(Sym_ID), lty=2, col=c("blue", "red", "green")[match(Target, c("A","B","D"))],
+          data=subset(dark, Target==s & nchar(as.character(Sym_ID))==1))
+    lines(Q ~ as.numeric(Sym_ID), lty=1, col=c("blue", "red", "green")[match(Target, c("A","B","D"))],
+          data=subset(dark, Target==s))
+  }
+  
+  # Return contrasts and summary stats
+  return(list(s1lsm=s1lsm, s2lsm=s2lsm, fulllsm=fulllsm))
+}
+```
+
+## deWit analysis for B and D @ time 1
+```{r t1DB}
+t1DB <- deWit(s1="D", s2="B", time=1, data=df)  
+```
+
+#### Test whether D is different from deWit expectations when mixed with B
+In the contrast computed below, "BD - D" indicates the difference between the actual amount of D when mixed with B, and the amount of D expected by the deWit model. Thus, a negative value for the contrast "estimate" indicates that the actual value is less than the expected value, and a positive value indicate the actual value is greater than expected. These estimates are only significant when p < alpha.
+```{r}
+t1DB$s1lsm$contrasts
+```
+
+#### Test whether B is different from deWit expectations when mixed with D
+```{r}
+t1DB$s2lsm$contrasts
+```
+
+## deWit analysis for A and D @ time 1
+```{r t1AD}
+t1AD <- deWit(s1="A", s2="D", time=1, data=df)
+```
+
+#### Test whether A is different from deWit expectations when mixed with D
+```{r}
+t1AD$s1lsm$contrasts
+```
+
+#### Test whether D is different from deWit expectations when mixed with A
+```{r}
+t1AD$s2lsm$contrasts  # A greater than expected in light and dark
+                                          # D less than expected in dark, almost significantly less than expected in light
+```
+
+## deWit analysis for A and B @ time 1
+```{r t1AB}
+t1AB <- deWit(s1="A", s2="B", time=1, data=df)
+```
+
+#### Test whether A is different from deWit expectations when mixed with B
+```{r}
+t1AB$s1lsm$contrasts
+```
+
+#### Test whether B is different from deWit expectations when mixed with A
+```{r}
+t1AB$s2lsm$contrasts
+```
+
+
+## deWit analysis for B and D @ time 2
+```{r t2DB}
+t2DB <- deWit(s1="D", s2="B", time=2, data=df)
+```
+
+#### Test whether D is different from deWit expectations when mixed with B
+```{r}
+t2DB$s1lsm$contrasts
+```
+
+#### Test whether B is different from deWit expectations when mixed with D
+```{r}
+t2DB$s2lsm$contrasts
+```
+
+## deWit analysis for A and D @ time 2
+```{r t2AD}
+t2AD <- deWit(s1="A", s2="D", time=2, data=df)
+```
+
+#### Test whether A is different from deWit expectations when mixed with D
+```{r}
+t2AD$s1lsm$contrasts
+```
+
+#### Test whether D is different from deWit expectations when mixed with A
+```{r}
+t2AD$s2lsm$contrasts
+```
+
+## deWit analysis for A and B @ time 2
+```{r t2AB}
+t2AB <- deWit(s1="A", s2="B", time=2, data=df)
+```
+
+#### Test whether A is different from deWit expectations when mixed with B
+```{r}
+t2AB$s1lsm$contrasts
+```
+
+#### Test whether B is different from deWit expectations when mixed with A
+```{r}
+t2AB$s2lsm$contrasts
+```
+
