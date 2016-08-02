@@ -25,14 +25,14 @@ std <- std[which(std$Quantity<=64000), ]  # Ignore data from 128,000 cells
 
 ### Import polyp data
 ```{r polyp}
-polyp <- read.csv("polyps.csv")
+polyp <- read.csv("polyps_clean.csv") ##samples that we re-run multiple times were causing a problem downstream but now have cleaned up raw data file to remove poor quality data resulting in just one set of data for each sample-target
 polyp <- polyp[, c("Plate", "Sample", "Target", "CT")]
 polyp$CT <- as.numeric(as.character(polyp$CT))
 polyp$Plate <- as.numeric(as.character(polyp$Plate))
 target <- polyp$Target
 polyp$Target <- as.numeric(as.factor(polyp$Target))
 # Aggregate technical replicates -- samples where only one replicate amplified will return as NA
-polyp <- aggregate(polyp, by=list(Sample=polyp$Sample, Target=polyp$Target, Plate=polyp$Plate), FUN=mean)
+polyp <- aggregate(polyp, by=list(Sample=polyp$Sample, Target=polyp$Target, Plate=polyp$Plate), FUN=mean) 
 polyp$Target <- levels(target)[polyp$Target]
 polyp <- polyp[,c(1,2,3,7)]
 ```
@@ -52,21 +52,21 @@ anova(curves)  # Interaction is significant --> slopes are different
 ```{r calcquant}
 #predict(curves, newdata=polyp)
 # error: plate 1 not present in standard curve data ---????
-# remove plate 1 samples for now...
-polyp <- droplevels(polyp[which(polyp$Plate!="1"), ])
+# remove plate 1 samples for now...##fixed data sheet to include Plate 1 SEM 1 Aug 2016
+##polyp <- droplevels(polyp[which(polyp$Plate!="1"), ]) ##fixed by SEM 1 Aug 2016
 polyp$Quantity2 <- 10^predict(curves, newdata=polyp)
 #polyp$Quantity2 <- 10^predict(curves, newdata=polyp, re.form=NA)
 ```
 
 ### Import sample data and merge with qPCR data
 ```{r samdat}
-sam <- read.csv("qPCRdata.csv")  # sample data is called "qPCRdata.csv"
+sam <- read.csv("treatments.csv")  # sample data is called "treatments.csv"
 sam <- sam[, c("Sample", "Sym_ID", "Env", "Time", "Rep")]
 df <- merge(sam, polyp, by = "Sample")
 # Identify samples that were successful mixed infections
-nclades <- aggregate(df$Quantity2, by=list(Sample=df$Sample), FUN=function(x) length(is.na(x)[is.na(x)==F]))
+nclades <- aggregate(df$Quantity2, by=list(Sample=df$Sample), FUN=function(x) length(is.na(x)[is.na(x)==F])) 
 rownames(nclades) <- nclades$Sample
-df$mixed <- ifelse(nclades[as.character(df$Sample), "x"] > 1, TRUE, FALSE)
+df$mixed <- ifelse(nclades[as.character(df$Sample), "x"] == 2 , TRUE, FALSE)  ##Changed to "==2" because some contamination caused a few samples to have 3 clades
 df$mixed[which(nchar(as.character(df$Sym_ID))==1)] <- NA
 ```
 
