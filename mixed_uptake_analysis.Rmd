@@ -68,6 +68,16 @@ nclades <- aggregate(df$Quantity2, by=list(Sample=df$Sample), FUN=function(x) le
 rownames(nclades) <- nclades$Sample
 df$mixed <- ifelse(nclades[as.character(df$Sample), "x"] == 2 , TRUE, FALSE)  ##Changed to "==2" because some contamination caused a few samples to have 3 clades
 df$mixed[which(nchar(as.character(df$Sym_ID))==1)] <- NA
+
+# What symbionts did each sample actually have??
+actual <- with(df[which(!is.na(df$Quantity2)), ], 
+               aggregate(data.frame(actual=Target), by=list(Sample=Sample), 
+                         FUN=function(x) paste0(x[order(x)], collapse="")))
+df <- merge(df, actual, by="Sample")
+# If they actually had what they were offered, then success = T, otherwise success = F
+df$success <- ifelse(df$actual==as.character(df$Sym_ID), TRUE, FALSE)
+
+
 ```
 
 ### Create function to test deviation from deWit expectations and plot results
@@ -81,7 +91,9 @@ deWit <- function(s1, s2, time, data) {
                Time==time & 
                Sym_ID %in% c(s1, paste0(c(s1, s2)[order(c(s1, s2))], collapse=""), s2) &
                Target %in% c(s1, s2) &
-               (mixed==T | is.na(mixed)))  # excludes polyps that were offered two symbionts but only took up one
+               #(mixed==T | is.na(mixed)))  # excludes polyps that were offered two symbionts but only took up one
+               success==T) # ONLY INCLUDES POLYPS THAT ACTUALLY HAD WHAT THEY WERE OFFERED
+  
   df <- droplevels(df)  # drop empty factor levels
   # Fit a mixed model to compare abundance of symbiont1 in mixed infection to expected value
   # of deWit model (i.e., half of the values from symbiont1 single infections)
