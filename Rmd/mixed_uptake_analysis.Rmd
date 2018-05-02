@@ -1,0 +1,328 @@
+---
+title: "Data and code for: Competitive interactions among symbionts for new host habitat"
+author: "Ross Cunning, Shelby E. McIlory"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+# Set knitr options
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+knitr::opts_knit$set(root.dir = normalizePath(".."))
+```
+
+### Load libraries
+```{r}
+library(lme4)
+library(lmerTest)
+library(lattice)
+library(reshape2)
+library(multcomp)
+library(lsmeans)
+library(dplyr)
+```
+
+# Standard curve qPCR data
+
+### Import standard curve qPCR data
+```{r std}
+std <- read.csv("data/stdcurves.csv")
+std$CT <- as.numeric(as.character(std$CT))
+std$Plate <- as.factor(std$Plate)
+std <- std[which(std$Quantity<=64000), ]  # Ignore data from 128,000 cells
+```
+
+### Visualize standard curves on each plate
+```{r stdcurvefig}
+xyplot(log10(Quantity) ~ CT | Plate, groups=Target, type=c("p", "r"), data=std)
+```
+
+### Fit mixed model to standard curve data
+```{r stdmod}
+curves <- lmerTest::lmer(log10(Quantity) ~ CT * Target + (Target|Plate) + (CT|Plate), data=std)
+anova(curves)  # Interaction is significant --> slopes are different
+```
+
+# Polyp samples qPCR data
+
+### Import polyp CT values
+```{r polyp}
+polyp <- read.csv("data/polyps_clean.csv")
+polyp <- polyp[, c("Plate", "Sample", "Target", "CT")]
+polyp$CT <- as.numeric(as.character(polyp$CT))
+polyp$Plate <- as.numeric(as.character(polyp$Plate))
+target <- polyp$Target
+polyp$Target <- as.numeric(as.factor(polyp$Target))
+# Aggregate technical replicates -- samples where only one replicate amplified will return as NA
+polyp <- aggregate(polyp, by=list(Sample=polyp$Sample, Target=polyp$Target, Plate=polyp$Plate), FUN=mean) 
+polyp$Target <- levels(target)[polyp$Target]
+polyp <- polyp[,c(1,2,3,7)]
+```
+
+### Calculate cell numbers for polyp samples using fitted standard curves
+```{r calcquant}
+polyp$Quantity <- 10^predict(curves, newdata=polyp)
+```
+
+### Import sample metadata and merge with qPCR data
+```{r samdat}
+sam <- read.csv("data/treatments.csv")  # sample metadata is called "treatments.csv"
+sam <- sam[, c("Sample", "Sym_ID", "Env", "Time", "Rep")]
+df <- merge(sam, polyp, by = "Sample")
+# Identify samples that were successful mixed infections
+nclades <- aggregate(df$Quantity, by=list(Sample=df$Sample), FUN=function(x) length(is.na(x)[is.na(x)==F])) 
+rownames(nclades) <- nclades$Sample
+df$mixed <- ifelse(nclades[as.character(df$Sample), "x"] == 2 , TRUE, FALSE)  ##Changed to "==2" because some contamination caused a few samples to have 3 clades
+df$mixed[which(nchar(as.character(df$Sym_ID))==1)] <- NA
+
+# What symbionts did each sample actually have??
+actual <- with(df[which(!is.na(df$Quantity)), ], 
+               aggregate(data.frame(actual=Target), by=list(Sample=Sample), 
+                         FUN=function(x) paste0(x[order(x)], collapse="")))
+df <- merge(df, actual, by="Sample")
+# If they actually had what they were offered, then success = T, otherwise success = F
+df$success <- ifelse(df$actual==as.character(df$Sym_ID), TRUE, FALSE)
+```
+
+# Total density in single infections
+
+## Time 1: 6 weeks
+
+```{r}
+# Subset successful single infections at time 1
+single1 <- dplyr::filter(df, Sym_ID %in% c("A", "B", "D") & success==TRUE & Time==1)
+
+# Fit ANOVA
+t1_aov <- aov(log10(Quantity) ~ Sym_ID * Env, data=single1)
+summary(t1_aov)
+#Significant Sym_ID and Env
+#Tukey's post-hoc
+TukeyHSD(t1_aov)
+```
+
+## Time 2: 8 weeks
+
+```{r}
+# Subset successful single infections at time 2
+single2 <- dplyr::filter(df, Sym_ID %in% c("A", "B", "D") & success==TRUE & Time==2)
+
+# Fit ANOVA
+t2_aov <- aov(log10(Quantity) ~ Sym_ID * Env, data=single2)
+summary(t2_aov)
+#No Significant Difference
+```
+
+# Competitive exclusion
+
+```{r}
+# Time points are pooled
+##To test the significance of the frequency of competitive exclusion with a Chi-square
+
+#Import Data
+exclusion<-read.csv("data/exclusion_data.csv")
+
+#Subset Treatments by Light and Symbiont mix
+AB_L<-droplevels(subset(exclusion,exclusion$Environment=="Light"&exclusion$Treatment=="AB"))
+AB_D<-droplevels(subset(exclusion,exclusion$Environment=="Dark"&exclusion$Treatment=="AB"))
+AD_L<-droplevels(subset(exclusion,exclusion$Environment=="Light"&exclusion$Treatment=="AD"))
+AD_D<-droplevels(subset(exclusion,exclusion$Environment=="Dark"&exclusion$Treatment=="AD"))
+BD_L<-droplevels(subset(exclusion,exclusion$Environment=="Light"&exclusion$Treatment=="BD"))
+BD_D<-droplevels(subset(exclusion,exclusion$Environment=="Dark"&exclusion$Treatment=="BD"))
+
+#Run Chi-Square test with Yate's correction, xtabs makes "count tables" from frequency data frame
+chisq.test(xtabs(Frequency ~ Symbiont+Presence, data=AB_L))
+chisq.test(xtabs(Frequency ~ Symbiont+Presence, data=AB_D))
+chisq.test(xtabs(Frequency ~ Symbiont+Presence, data=AD_L))
+chisq.test(xtabs(Frequency ~ Symbiont+Presence, data=AD_D))
+chisq.test(xtabs(Frequency ~ Symbiont+Presence, data=BD_L))
+chisq.test(xtabs(Frequency ~ Symbiont+Presence, data=BD_D))
+```
+
+# Competitive dominance
+
+The following analysis for each time point first **excludes polyps that were offered two symbionts but only took up one**, and then fits a mixed model **(with plate included as a random factor)** to the log-transformed cell quantity data. The quantity of cells in the mixed infection is compared to the quantity of cells in the single infection divided by two. All single and mixed observations are maintained in the model, **allowing the variance of the single infection data to be maintained** in the statistical test.
+
+## Time 1: 6 weeks
+
+```{r Time1}
+#pdf(file="figures/6weeks.pdf", width=8, height=6)
+
+# Create a subset of the data for symbionts s1 and s2 at the selected time point (time)
+t1 <- subset(df, Time==1 & success==T) 
+t1 <- droplevels(t1)  # drop empty factor levels
+t1$Plate <- as.factor(t1$Plate)
+
+# fit for plotting
+fullmod <- with(t1, {
+  lmer(log10(Quantity) ~ Sym_ID * Env * Target + (Target|Plate), data=t1)
+})
+fulllsm <- lsmeans(fullmod, specs=c("Sym_ID", "Env", "Target"))
+
+# Create a six-panel figure for plotting lsmeans
+par(mfrow=c(2,3))
+
+# Subset "dark" data and plot
+dark <- subset(summary(fulllsm), Env=="Dark")
+dark$lsmean[is.na(dark$lsmean)] <- 0
+dark$Q <- 10^dark$lsmean
+dark$`Q+se` <- 10^(dark$lsmean + dark$SE)
+dark$`Q-se` <- 10^(dark$lsmean - dark$SE)
+max <- max(dark$`Q+se`, na.rm=T)
+darkAB <- subset(dark, Target %in% c("A", "B") & Sym_ID %in% c("A", "B", "AB"))
+darkAB$trt <- factor(darkAB$Sym_ID, levels=c("A", "AB", "B"))
+darkAD <- subset(dark, Target %in% c("A", "D") & Sym_ID %in% c("A", "D", "AD"))
+darkAD$trt <- factor(darkAD$Sym_ID, levels=c("A", "AD", "D"))
+darkBD <- subset(dark, Target %in% c("B", "D") & Sym_ID %in% c("B", "D", "BD"))
+darkBD$trt <- factor(darkBD$Sym_ID, levels=c("B", "BD", "D"))
+
+for (p in list(darkAB, darkAD, darkBD)) {
+  plot(Q ~ as.numeric(trt), data=p, xaxt="n", xlab="", main="Dark", ylim=c(0, max),
+     col=c("red", "blue", "purple")[match(Target, c("A","B","D"))])
+  with(p, arrows(as.numeric(trt), `Q+se`, as.numeric(trt), `Q-se`, 
+                      angle=90, code=3, length=0.05, 
+                      col=c("red", "blue", "purple")[match(Target, c("A","B","D"))]))
+  axis(side=1, at=unique(as.numeric(p$trt)),
+       labels=levels(p$trt)[unique(as.numeric(p$trt))])
+  for (s in levels(factor(p$Target))) {
+    lines(Q ~ as.numeric(trt), lty=2, 
+          col=c("red", "blue", "purple")[match(Target, c("A","B","D"))],
+        data=subset(p, Target==s & nchar(as.character(Sym_ID))==1))
+  }
+}
+
+# Subset "light" data and plot
+light <- subset(summary(fulllsm), Env=="Light")
+light$lsmean[is.na(light$lsmean)] <- 0
+light$Q <- 10^light$lsmean
+light$`Q+se` <- 10^(light$lsmean + light$SE)
+light$`Q-se` <- 10^(light$lsmean - light$SE)
+max <- max(light$`Q+se`, na.rm=T)
+lightAB <- subset(light, Target %in% c("A", "B") & Sym_ID %in% c("A", "B", "AB"))
+lightAB$trt <- factor(lightAB$Sym_ID, levels=c("A", "AB", "B"))
+lightAD <- subset(light, Target %in% c("A", "D") & Sym_ID %in% c("A", "D", "AD"))
+lightAD$trt <- factor(lightAD$Sym_ID, levels=c("A", "AD", "D"))
+lightBD <- subset(light, Target %in% c("B", "D") & Sym_ID %in% c("B", "D", "BD"))
+lightBD$trt <- factor(lightBD$Sym_ID, levels=c("B", "BD", "D"))
+
+for (p in list(lightAB, lightAD, lightBD)) {
+  plot(Q ~ as.numeric(trt), data=p, xaxt="n", xlab="", main="light", ylim=c(0, max),
+     col=c("red", "blue", "purple")[match(Target, c("A","B","D"))])
+  with(p, arrows(as.numeric(trt), `Q+se`, as.numeric(trt), `Q-se`, 
+                      angle=90, code=3, length=0.05, 
+                      col=c("red", "blue", "purple")[match(Target, c("A","B","D"))]))
+  axis(side=1, at=unique(as.numeric(p$trt)),
+       labels=levels(p$trt)[unique(as.numeric(p$trt))])
+  for (s in levels(factor(p$Target))) {
+    lines(Q ~ as.numeric(trt), lty=2, 
+          col=c("red", "blue", "purple")[match(Target, c("A","B","D"))],
+        data=subset(p, Target==s & nchar(as.character(Sym_ID))==1))
+  }
+}
+
+#dev.off()
+
+
+# Run model with single infections divided by 2 to test for differences from deWit expectation
+t1$Quantity2 <- ifelse(t1$Target==t1$Sym_ID, t1$Quantity / 2, t1$Quantity)
+mod <- lmer(log10(Quantity2) ~ Sym_ID * Env * Target + (Target|Plate), data=t1)
+lsm <- lsmeans(mod, specs=c("Sym_ID", "Env", "Target"), type="response")
+
+# Pairwise tests
+tests <- pairs(lsm, by=c("Env", "Target"))
+tests <- tests[c(1,2,16,17,37,43,52,58,72,75,87,90), ]
+rbind(tests, adjust="none")
+```
+
+## Time 2: 8 weeks
+
+```{r Time2}
+#pdf(file="figures/8weeks.pdf", width=8, height=6)
+
+# Create a subset of the data for symbionts s1 and s2 at the selected time point (time)
+t2 <- subset(df, Time==2 & success==T) 
+t2 <- droplevels(t2)  # drop empty factor levels
+t2$Plate <- as.factor(t2$Plate)
+
+# fit for plotting
+fullmod <- with(t2, {
+  lmer(log10(Quantity) ~ Sym_ID * Env * Target + (Target|Plate), data=t2)
+})
+fulllsm <- lsmeans(fullmod, specs=c("Sym_ID", "Env", "Target"))
+
+# Create a six-panel figure plotting lsmeans
+par(mfrow=c(2,3))
+
+# Subset "dark" data and plot
+dark <- subset(summary(fulllsm), Env=="Dark")
+dark$lsmean[is.na(dark$lsmean)] <- 0
+dark$Q <- 10^dark$lsmean
+dark$`Q+se` <- 10^(dark$lsmean + dark$SE)
+dark$`Q-se` <- 10^(dark$lsmean - dark$SE)
+max <- max(dark$`Q+se`, na.rm=T)
+darkAB <- subset(dark, Target %in% c("A", "B") & Sym_ID %in% c("A", "B", "AB"))
+darkAB$trt <- factor(darkAB$Sym_ID, levels=c("A", "AB", "B"))
+darkAD <- subset(dark, Target %in% c("A", "D") & Sym_ID %in% c("A", "D", "AD"))
+darkAD$trt <- factor(darkAD$Sym_ID, levels=c("A", "AD", "D"))
+darkBD <- subset(dark, Target %in% c("B", "D") & Sym_ID %in% c("B", "D", "BD"))
+darkBD$trt <- factor(darkBD$Sym_ID, levels=c("B", "BD", "D"))
+
+for (p in list(darkAB, darkAD, darkBD)) {
+  plot(Q ~ as.numeric(trt), data=p, xaxt="n", xlab="", main="Dark", ylim=c(0, max),
+     col=c("red", "blue", "purple")[match(Target, c("A","B","D"))])
+  with(p, arrows(as.numeric(trt), `Q+se`, as.numeric(trt), `Q-se`, 
+                      angle=90, code=3, length=0.05, 
+                      col=c("red", "blue", "purple")[match(Target, c("A","B","D"))]))
+  axis(side=1, at=unique(as.numeric(p$trt)),
+       labels=levels(p$trt)[unique(as.numeric(p$trt))])
+  for (s in levels(factor(p$Target))) {
+    lines(Q ~ as.numeric(trt), lty=2, 
+          col=c("red", "blue", "purple")[match(Target, c("A","B","D"))],
+        data=subset(p, Target==s & nchar(as.character(Sym_ID))==1))
+  }
+}
+
+# Subset "light" data and plot
+light <- subset(summary(fulllsm), Env=="Light")
+light$lsmean[is.na(light$lsmean)] <- 0
+light$Q <- 10^light$lsmean
+light$`Q+se` <- 10^(light$lsmean + light$SE)
+light$`Q-se` <- 10^(light$lsmean - light$SE)
+max <- max(light$`Q+se`, na.rm=T)
+lightAB <- subset(light, Target %in% c("A", "B") & Sym_ID %in% c("A", "B", "AB"))
+lightAB$trt <- factor(lightAB$Sym_ID, levels=c("A", "AB", "B"))
+lightAD <- subset(light, Target %in% c("A", "D") & Sym_ID %in% c("A", "D", "AD"))
+lightAD$trt <- factor(lightAD$Sym_ID, levels=c("A", "AD", "D"))
+lightBD <- subset(light, Target %in% c("B", "D") & Sym_ID %in% c("B", "D", "BD"))
+lightBD$trt <- factor(lightBD$Sym_ID, levels=c("B", "BD", "D"))
+
+for (p in list(lightAB, lightAD, lightBD)) {
+  plot(Q ~ as.numeric(trt), data=p, xaxt="n", xlab="", main="light", ylim=c(0, max),
+     col=c("red", "blue", "purple")[match(Target, c("A","B","D"))])
+  with(p, arrows(as.numeric(trt), `Q+se`, as.numeric(trt), `Q-se`, 
+                      angle=90, code=3, length=0.05, 
+                      col=c("red", "blue", "purple")[match(Target, c("A","B","D"))]))
+  axis(side=1, at=unique(as.numeric(p$trt)),
+       labels=levels(p$trt)[unique(as.numeric(p$trt))])
+  for (s in levels(factor(p$Target))) {
+    lines(Q ~ as.numeric(trt), lty=2, 
+          col=c("red", "blue", "purple")[match(Target, c("A","B","D"))],
+        data=subset(p, Target==s & nchar(as.character(Sym_ID))==1))
+  }
+}
+
+#dev.off()
+
+# Run model with single infections divided by 2 to test for differences from deWit expectation
+t2$Quantity2 <- ifelse(t2$Target==t2$Sym_ID, t2$Quantity / 2, t2$Quantity)
+mod <- lmer(log10(Quantity2) ~ Sym_ID * Env * Target + (Target|Plate), data=t2)
+lsm <- lsmeans(mod, specs=c("Sym_ID", "Env", "Target"), type="response")
+
+# Pairwise comparisons
+tests <- pairs(lsm, by=c("Env", "Target"))
+tests <- tests[c(1,2,16,17,37,43,52,58,72,75,87,90), ]
+rbind(tests, adjust="none")
+```
