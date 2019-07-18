@@ -1,6 +1,6 @@
 ---
 title: "Data and code for: Competitive interactions among symbionts for new host habitat"
-author: "Ross Cunning, Shelby E. McIlory"
+author: "Ross Cunning, Shelby E. McIlroy"
 date: "`r Sys.Date()`"
 output:
   html_document:
