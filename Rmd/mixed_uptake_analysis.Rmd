@@ -151,6 +151,8 @@ The following analysis for each time point first **excludes polyps that were off
 ```{r Time1}
 #pdf(file="figures/6weeks.pdf", width=8, height=6)
 
+myPalette <- c("#E69F00", "#56B4E9", "#009E73")
+
 # Create a subset of the data for symbionts s1 and s2 at the selected time point (time)
 t1 <- subset(df, Time==1 & success==T) 
 t1 <- droplevels(t1)  # drop empty factor levels
@@ -181,15 +183,16 @@ darkBD$trt <- factor(darkBD$Sym_ID, levels=c("B", "BD", "D"))
 
 for (p in list(darkAB, darkAD, darkBD)) {
   plot(Q ~ as.numeric(trt), data=p, xaxt="n", xlab="", main="Dark", ylim=c(0, max),
-     col=c("red", "blue", "purple")[match(Target, c("A","B","D"))])
+     col=myPalette[match(Target, c("A","B","D"))],
+       pch=c(0,1,2)[match(Target, c("A","B","D"))])
   with(p, arrows(as.numeric(trt), `Q+se`, as.numeric(trt), `Q-se`, 
                       angle=90, code=3, length=0.05, 
-                      col=c("red", "blue", "purple")[match(Target, c("A","B","D"))]))
+                      col=myPalette[match(Target, c("A","B","D"))]))
   axis(side=1, at=unique(as.numeric(p$trt)),
        labels=levels(p$trt)[unique(as.numeric(p$trt))])
   for (s in levels(factor(p$Target))) {
     lines(Q ~ as.numeric(trt), lty=2, 
-          col=c("red", "blue", "purple")[match(Target, c("A","B","D"))],
+          col=myPalette[match(Target, c("A","B","D"))],
         data=subset(p, Target==s & nchar(as.character(Sym_ID))==1))
   }
 }
@@ -210,16 +213,17 @@ lightBD$trt <- factor(lightBD$Sym_ID, levels=c("B", "BD", "D"))
 
 for (p in list(lightAB, lightAD, lightBD)) {
   plot(Q ~ as.numeric(trt), data=p, xaxt="n", xlab="", main="light", ylim=c(0, max),
-     col=c("red", "blue", "purple")[match(Target, c("A","B","D"))])
+       col=myPalette[match(Target, c("A","B","D"))],
+       pch=c(0,1,2)[match(Target, c("A","B","D"))])
   with(p, arrows(as.numeric(trt), `Q+se`, as.numeric(trt), `Q-se`, 
-                      angle=90, code=3, length=0.05, 
-                      col=c("red", "blue", "purple")[match(Target, c("A","B","D"))]))
+                 angle=90, code=3, length=0.05, 
+                 col=myPalette[match(Target, c("A","B","D"))]))
   axis(side=1, at=unique(as.numeric(p$trt)),
        labels=levels(p$trt)[unique(as.numeric(p$trt))])
   for (s in levels(factor(p$Target))) {
     lines(Q ~ as.numeric(trt), lty=2, 
-          col=c("red", "blue", "purple")[match(Target, c("A","B","D"))],
-        data=subset(p, Target==s & nchar(as.character(Sym_ID))==1))
+          col=myPalette[match(Target, c("A","B","D"))],
+          data=subset(p, Target==s & nchar(as.character(Sym_ID))==1))
   }
 }
 
@@ -272,15 +276,16 @@ darkBD$trt <- factor(darkBD$Sym_ID, levels=c("B", "BD", "D"))
 
 for (p in list(darkAB, darkAD, darkBD)) {
   plot(Q ~ as.numeric(trt), data=p, xaxt="n", xlab="", main="Dark", ylim=c(0, max),
-     col=c("red", "blue", "purple")[match(Target, c("A","B","D"))])
+     col=myPalette[match(Target, c("A","B","D"))],
+       pch=c(0,1,2)[match(Target, c("A","B","D"))])
   with(p, arrows(as.numeric(trt), `Q+se`, as.numeric(trt), `Q-se`, 
                       angle=90, code=3, length=0.05, 
-                      col=c("red", "blue", "purple")[match(Target, c("A","B","D"))]))
+                      col=myPalette[match(Target, c("A","B","D"))]))
   axis(side=1, at=unique(as.numeric(p$trt)),
        labels=levels(p$trt)[unique(as.numeric(p$trt))])
   for (s in levels(factor(p$Target))) {
     lines(Q ~ as.numeric(trt), lty=2, 
-          col=c("red", "blue", "purple")[match(Target, c("A","B","D"))],
+          col=myPalette[match(Target, c("A","B","D"))],
         data=subset(p, Target==s & nchar(as.character(Sym_ID))==1))
   }
 }
@@ -301,15 +306,16 @@ lightBD$trt <- factor(lightBD$Sym_ID, levels=c("B", "BD", "D"))
 
 for (p in list(lightAB, lightAD, lightBD)) {
   plot(Q ~ as.numeric(trt), data=p, xaxt="n", xlab="", main="light", ylim=c(0, max),
-     col=c("red", "blue", "purple")[match(Target, c("A","B","D"))])
+     col=myPalette[match(Target, c("A","B","D"))],
+       pch=c(0,1,2)[match(Target, c("A","B","D"))])
   with(p, arrows(as.numeric(trt), `Q+se`, as.numeric(trt), `Q-se`, 
                       angle=90, code=3, length=0.05, 
-                      col=c("red", "blue", "purple")[match(Target, c("A","B","D"))]))
+                      col=myPalette[match(Target, c("A","B","D"))]))
   axis(side=1, at=unique(as.numeric(p$trt)),
        labels=levels(p$trt)[unique(as.numeric(p$trt))])
   for (s in levels(factor(p$Target))) {
     lines(Q ~ as.numeric(trt), lty=2, 
-          col=c("red", "blue", "purple")[match(Target, c("A","B","D"))],
+          col=myPalette[match(Target, c("A","B","D"))],
         data=subset(p, Target==s & nchar(as.character(Sym_ID))==1))
   }
 }
